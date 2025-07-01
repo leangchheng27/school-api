@@ -31,6 +31,7 @@ import db from '../models/index.js';
  *       201:
  *         description: Course created
  */
+
 export const createCourse = async (req, res) => {
     try {
         const course = await db.Course.create(req.body);
@@ -60,24 +61,28 @@ export const createCourse = async (req, res) => {
  *         description: List of courses
  */
 export const getAllCourses = async (req, res) => {
-
     const limit = parseInt(req.query.limit) || 10;
     const page = parseInt(req.query.page) || 1;
+    const sort = req.query.sort === 'desc' ? 'DESC' : 'ASC';
+    const populate = req.query.populate ? req.query.populate.split(',') : [];
 
-    const total = await db.Course.count();
+    const include = [];
+    if (populate.includes('Teacher') || populate.includes('teacherId')) include.push(db.Teacher);
+    if (populate.includes('Student') || populate.includes('studentId')) include.push(db.Student);
 
     try {
-        const courses = await db.Course.findAll(
-            {
-                // include: [db.Student, db.Teacher],
-                limit: limit, offset: (page - 1) * limit
-            }
-        );
+        const total = await db.Course.count();
+        const courses = await db.Course.findAll({
+            include,
+            limit,
+            offset: (page - 1) * limit,
+            order: [['createdAt', sort]],
+        });
         res.json({
-            total: total,
-            page: page,
-            data: courses,
+            total,
+            page,
             totalPages: Math.ceil(total / limit),
+            data: courses,
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -102,8 +107,13 @@ export const getAllCourses = async (req, res) => {
  *         description: Not found
  */
 export const getCourseById = async (req, res) => {
+    const populate = req.query.populate ? req.query.populate.split(',') : [];
+    const include = [];
+    if (populate.includes('Teacher') || populate.includes('teacherId')) include.push(db.Teacher);
+    if (populate.includes('Student') || populate.includes('studentId')) include.push(db.Student);
+
     try {
-        const course = await db.Course.findByPk(req.params.id, { include: [db.Student, db.Teacher] });
+        const course = await db.Course.findByPk(req.params.id, { include });
         if (!course) return res.status(404).json({ message: 'Not found' });
         res.json(course);
     } catch (err) {

@@ -44,14 +44,50 @@ export const createTeacher = async (req, res) => {
  *   get:
  *     summary: Get all teachers
  *     tags: [Teachers]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10 }
+ *         description: Number of items per page
+ *       - in: query
+ *         name: sort
+ *         schema: { type: string, enum: [asc, desc], default: asc }
+ *         description: Sort by created time
+ *       - in: query
+ *         name: populate
+ *         schema: { type: string, example: "Course" }
+ *         description: Comma-separated related models to include (Course)
  *     responses:
  *       200:
  *         description: List of teachers
  */
 export const getAllTeachers = async (req, res) => {
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const sort = req.query.sort === 'desc' ? 'DESC' : 'ASC';
+    const populate = req.query.populate ? req.query.populate.split(',') : [];
+
+    const include = [];
+    if (populate.includes('Course') || populate.includes('courseId')) include.push(db.Course);
+
     try {
-        const teachers = await db.Teacher.findAll({ include: db.Course });
-        res.json(teachers);
+        const total = await db.Teacher.count();
+        const teachers = await db.Teacher.findAll({
+            include,
+            limit,
+            offset: (page - 1) * limit,
+            order: [['createdAt', sort]],
+        });
+        res.json({
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
+            data: teachers,
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -75,8 +111,12 @@ export const getAllTeachers = async (req, res) => {
  *         description: Not found
  */
 export const getTeacherById = async (req, res) => {
+    const populate = req.query.populate ? req.query.populate.split(',') : [];
+    const include = [];
+    if (populate.includes('Course') || populate.includes('courseId')) include.push(db.Course);
+
     try {
-        const teacher = await db.Teacher.findByPk(req.params.id, { include: db.Course });
+        const teacher = await db.Teacher.findByPk(req.params.id, { include });
         if (!teacher) return res.status(404).json({ message: 'Not found' });
         res.json(teacher);
     } catch (err) {
